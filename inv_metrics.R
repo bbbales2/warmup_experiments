@@ -16,29 +16,30 @@ getHessian = function(fit, q) {
   0.5 * (A + t(A))
 }
 
-diag_metric = function(samples) {
+diag_inv_metric = function(samples) {
   diag(diag(cov(samples)))
 }
 
-dense_metric = function(samples) {
+dense_inv_metric = function(samples) {
   c = cov(samples)
   
-  if(nrow(samples) < ncol(samples)) {
+  if(nrow(samples) <= ncol(samples)) {
     e = eigen(c, T)
     nkeep = nrow(samples) - 1
-    mine = e$values[nkeep]
-    c = e$vectors[, 1:nkeep] %*% diag(e$values[1:nkeep] - mine) %*% t(e$vectors[, 1:nkeep])
+    evalues = pmax(e$values, tail(e$values[which(e$values > 1e-10)], 1))
+    mine = evalues[nkeep]
+    c = e$vectors[, 1:nkeep] %*% diag(evalues[1:nkeep] - mine) %*% t(e$vectors[, 1:nkeep])
     c = c + mine * diag(ncol(samples))
   }
   
   return(c)
 }
 
-lw_linear_metric = function(samples) {
+lw_linear_inv_metric = function(samples) {
   linshrink_cov(samples)
 }
 
-lw_linear_corr_metric = function(samples) {
+lw_linear_corr_inv_metric = function(samples) {
   sqrt_D = diag(sqrt(diag(cov(samples))))
   sqrt_Dinv = diag(1 / diag(sqrt_D))
   sqrt_D %*% linshrink_cov(samples %*% sqrt_Dinv) %*% sqrt_D
@@ -93,7 +94,7 @@ lw_nonlinear = function(X) {
   u %*% diag(dtilde) %*% t(u)
 }
 
-lw_nonlinear_metric = function(samples) {
+lw_nonlinear_inv_metric = function(samples) {
   #capture.output(out <- nlshrink_cov(samples))
   
   out = NULL
@@ -108,25 +109,25 @@ lw_nonlinear_metric = function(samples) {
   return(out)
 }
 
-lw_nonlinear_corr_metric = function(samples) {
+lw_nonlinear_corr_inv_metric = function(samples) {
   sqrt_D = diag(sqrt(diag(cov(samples))))
   sqrt_Dinv = diag(1 / diag(sqrt_D))
   return(sqrt_D %*% lw_nonlinear_metric(samples %*% sqrt_Dinv) %*% sqrt_D)
 }
 
-lw_nonlinear2_metric = function(samples) {
+lw_nonlinear2_inv_metric = function(samples) {
   capture.output(out <- nlshrink_cov(samples))
   
   return(out)
 }
 
-lw_nonlinear2_corr_metric = function(samples) {
+lw_nonlinear2_corr_inv_metric = function(samples) {
   sqrt_D = diag(sqrt(diag(cov(samples))))
   sqrt_Dinv = diag(1 / diag(sqrt_D))
   return(sqrt_D %*% lw_nonlinear2_metric(samples %*% sqrt_Dinv) %*% sqrt_D)
 }
 
-hessian_metric = function(samples) {
+hessian_inv_metric = function(samples) {
   H = getHessian(stan_fit, samples[1,])
   e = eigen(H, T)
   
@@ -137,12 +138,12 @@ hessian_metric = function(samples) {
   return(e$vectors %*% diag(-1 / e$values) %*% t(e$vectors))
 }
 
-metrics = list(diag_metric = diag_metric,
-               dense_metric = dense_metric,
-               lw_linear_metric = lw_linear_metric,
-               lw_linear_corr_metric = lw_linear_corr_metric,
-               #lw_nonlinear_metric = lw_nonlinear_metric,
-               #lw_nonlinear_corr_metric = lw_nonlinear_corr_metric,
-               #lw_nonlinear2_metric = lw_nonlinear2_metric,
-               #lw_nonlinear2_corr_metric = lw_nonlinear2_corr_metric,
-               hessian_metric = hessian_metric)
+metrics = list(diag_inv_metric = diag_inv_metric,
+               dense_inv_metric = dense_inv_metric,
+               lw_linear_inv_metric = lw_linear_inv_metric,
+               lw_linear_corr_inv_metric = lw_linear_corr_inv_metric,
+               #lw_nonlinear_inv_metric = lw_nonlinear_inv_metric,
+               #lw_nonlinear_corr_inv_metric = lw_nonlinear_corr_inv_metric,
+               #lw_nonlinear2_inv_metric = lw_nonlinear2_inv_metric,
+               #lw_nonlinear2_corr_inv_metric = lw_nonlinear2_corr_inv_metric,
+               hessian_inv_metric = hessian_inv_metric)
