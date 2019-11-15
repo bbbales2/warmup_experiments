@@ -12,7 +12,7 @@ models = tibble(name = c("kilpisjarvi", "accel_splines", "accel_gp", "diamonds",
                 adapt_delta = c(0.8, 0.99, 0.99, 0.8, 0.8, 0.8),
                 init = c(2.0, 0.25, 0.25, 2.0, 0.5, 2.0))
 
-model_i = 6
+model_i = 4
 
 model_name = models[[model_i, "name"]]
   
@@ -21,15 +21,14 @@ model_path = paste0(cmdstan_path(), "/examples/", model_name, "/", model_name, "
 model = cmdstan_model(model_path)
 model$compile()
 
+data_env = new.env(parent = baseenv())
+source(paste0(cmdstan_path(), "/examples/", model_name, "/", model_name, ".dat"), local = data_env)
+data = as.list.environment(data_env)
 
 stan_fit = stan(model_path,
                 data = data,
                 iter = 1)
-  
-data_env = new.env(parent = baseenv())
-source(paste0(cmdstan_path(), "/examples/", model_name, "/", model_name, ".dat"), local = data_env)
-data = as.list.environment(data_env)
-  
+
 fit = model$sample(data = data,
                    num_chains = 2,
                    save_warmup = 0,
@@ -52,7 +51,7 @@ getUnconstrainedSamples = function(files) {
     as.matrix()
 }
 
-X = getUnconstrainedSamples(fit$diagnostic_files())[1:500,]
+X = getUnconstrainedSamples(fit$diagnostic_files())[1:40,]
 D = diag(cov(X))
 evecs = eigen(cov(X), T)$vectors
 #X = apply(X, 1, function(row) { row / sqrt(D) }) %>% t
@@ -62,19 +61,27 @@ P = ncol(X)
 
 #X = sapply(1:N, function(x) rnorm(P)) %>% t
 
-edf = lapply(seq(3, N, by = N / 20), function(Nm) {
-  tibble(lw_evals = eigen(lw_linear_metric(X[1:Nm, ]), T)$values[1:min(P, Nm - 1)],
+
+
+edf = lapply(seq(3, N, by = 1), function(Nm) {
+  print(Nm)
+  tibble(#lw_evals = eigen(lw_linear_metric(X[1:Nm, ]), T)$values[1:min(P, Nm - 1)],
          #hess_evals = eigen(hessian_metric(X[(Nm - 1):Nm, ]), T)$values[1:min(P, Nm - 1)],
-         lw_corr_evals = eigen(lw_linear_corr_metric(X[1:Nm, ]), T)$values[1:min(P, Nm - 1)],
-         samp_evals = eigen(cov(X[1:Nm, ]), T)$values[1:min(P, Nm - 1)],
-         oracle_evals = diag(t(evecs) %*% cov(X[1:Nm, ]) %*% evecs)[1:min(P, Nm - 1)],
-         r = 1:min(P, Nm - 1),
+         #lw_corr_evals = eigen(lw_linear_corr_metric(X[1:Nm, ]), T)$values[1:min(P, Nm - 1)],
+         samp_evals = eigen(cov(X[1:Nm, ]), T)$values,#[1:min(P, Nm - 1)]
+         diag_evals = diag(diag_inv_metric(X[1:Nm, ])),
+         dense_evals = eigen(dense_inv_metric(X[1:Nm, ]), T)$values,
+         #oracle_evals = diag(t(evecs) %*% cov(X[1:Nm, ]) %*% evecs),
+         dense2_evals = eigen(dense2_inv_metric(X[1:Nm, ]), T)$values,
+         #eval_bound = sum(diag(diag_inv_metric(X[1:Nm, ]))) / P,
+         r = 1:P,#min(P, Nm - 1),
          Nm = Nm)
 }) %>% bind_rows
 
 edf %>%
-  gather(which, evals, lw_evals, samp_evals, oracle_evals) %>%
+  gather(which, evals, diag_evals, dense_evals, samp_evals, dense2_evals) %>%
+  filter(evals > 1e-10) %>%
   ggplot(aes(Nm, evals)) +
-  geom_line(aes(color = which, group = interaction(r, which)), size = 0.1, position = position_dodge(width = 1.0)) +
+  geom_line(aes(color = which, group = interaction(r, which)), size = 0.5, alpha = 0.75, position = position_dodge(width = 1.0)) +
   scale_y_log10()
 

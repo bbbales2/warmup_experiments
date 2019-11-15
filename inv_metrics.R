@@ -20,16 +20,55 @@ diag_inv_metric = function(samples) {
   diag(diag(cov(samples)))
 }
 
-dense_inv_metric = function(samples) {
+dense_inv_metric = function(samples, rank_check = TRUE) {
   c = cov(samples)
   
-  if(nrow(samples) <= ncol(samples)) {
+  rank = 0
+  if(rank_check) {
+    for(i in 1:(nrow(samples) - 1)) {
+      r2 = sum(samples[i,] - samples[i + 1,])^2
+      if(r2 > 1e-16 * ncol(samples)) {
+        rank = rank + 1
+      }
+    }
+  } else {
+    rank = min(ncol(samples), nrow(samples) - 1)
+  }
+
+  nkeep = rank
+    
+  if(nkeep < ncol(samples)) {
     e = eigen(c, T)
-    nkeep = nrow(samples) - 1
-    evalues = pmax(e$values, tail(e$values[which(e$values > 1e-10)], 1))
-    mine = evalues[nkeep]
-    c = e$vectors[, 1:nkeep] %*% diag(evalues[1:nkeep] - mine) %*% t(e$vectors[, 1:nkeep])
+    mine = e$values[nkeep]
+    c = e$vectors[, 1:nkeep] %*% diag(e$values[1:nkeep] - mine) %*% t(e$vectors[, 1:nkeep])
     c = c + mine * diag(ncol(samples))
+  }
+  
+  return(c)
+}
+
+dense2_inv_metric = function(samples, rank_check = TRUE) {
+  c = cov(samples)
+  
+  rank = 0
+  if(rank_check) {
+    for(i in 1:(nrow(samples) - 1)) {
+      r2 = sum(samples[i,] - samples[i + 1,])^2
+      if(r2 > 1e-16 * ncol(samples)) {
+        rank = rank + 1
+      }
+    }
+  } else {
+    rank = min(ncol(samples), nrow(samples) - 1)
+  }
+  
+  keep = rank
+  
+  if(keep < ncol(samples)) {
+    e = eigen(c, T)
+    notkeep = e$vectors[, (keep + 1):ncol(e$vectors)]
+    c = e$vectors[, 1:keep] %*% diag(e$values[1:keep]) %*% t(e$vectors[, 1:keep]) +
+      notkeep %*% diag(diag(t(notkeep) %*% diag(diag(c)) %*% notkeep), nrow = ncol(samples) - keep) %*% t(notkeep)
   }
   
   return(c)
